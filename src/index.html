@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AutoFix Application</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style type="text/tailwindcss">
+        :root {
+            --primary-color: #2563eb; /* Blue 600 */
+            --primary-hover: #1d4ed8; /* Blue 700 */
+            --background-color: #f9fafb; /* Gray 50 */
+            --card-background: #ffffff;
+            --border-color: #e5e7eb; /* Gray 200 */
+            --text-primary: #111827; /* Gray 900 */
+            --text-secondary: #6b7280; /* Gray 500 */
+            --text-on-primary: #ffffff;
+        }
+        body {
+            font-family: 'Manrope', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+        }
+        .screen { display: none; }
+        .active-screen { display: block; }
+        .modal-hidden { display: none; }
+        
+        /* Component Styles */
+        .form-input { @apply w-full rounded-lg border-[var(--border-color)] text-base shadow-sm transition-colors focus:border-[var(--primary-color)] focus:ring focus:ring-[var(--primary-color)] focus:ring-opacity-50; }
+        .form-label { @apply block text-sm font-medium text-[var(--text-secondary)] mb-1; }
+        .btn-primary { @apply w-full flex justify-center items-center gap-2 rounded-lg bg-[var(--primary-color)] text-[var(--text-on-primary)] font-bold py-3 px-4 shadow-sm hover:bg-[var(--primary-hover)] transition-all duration-300 transform hover:scale-[1.02]; }
+        .btn-secondary { @apply w-full flex justify-center items-center gap-2 rounded-lg bg-[var(--text-secondary)] text-[var(--text-on-primary)] font-bold py-3 px-4 shadow-sm hover:bg-[var(--text-primary)] transition-colors duration-300 transform hover:scale-[1.02]; }
+        .btn-whatsapp { @apply w-full flex justify-center items-center gap-2 rounded-lg bg-[#25D366] text-white font-bold py-3 px-4 shadow-sm hover:bg-[#1DA851] transition-all duration-300 transform hover:scale-[1.02]; }
+        .card { @apply bg-[var(--card-background)] p-5 rounded-xl border border-[var(--border-color)] shadow-sm; }
+        .app-header { @apply bg-white border-b border-[var(--border-color)] sticky top-0 z-10; }
+        .app-header-content { @apply max-w-7xl mx-auto p-4 flex justify-between items-center relative; }
+        .app-main { @apply p-4 max-w-7xl mx-auto space-y-6 pb-24; }
+
+        /* Bottom Nav Styling */
+        .bottom-nav { @apply fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--border-color)] shadow-[0_-2px_5px_rgba(0,0,0,0.05)]; }
+        .nav-item { @apply flex flex-col items-center justify-center flex-1 py-2 gap-1 text-[var(--text-secondary)] transition-colors; }
+        .nav-item.active { @apply text-[var(--primary-color)]; }
+        .nav-item .material-symbols-outlined { @apply text-2xl; }
+        .nav-item span { @apply text-xs font-medium; }
+
+        /* Report Table Styles */
+        .table-container { @apply w-full overflow-auto rounded-lg border border-[var(--border-color)] max-h-[70vh]; }
+        .report-table { @apply min-w-full divide-y divide-[var(--border-color)]; }
+        .report-table th { @apply sticky top-0 bg-gray-50 px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider z-10 whitespace-nowrap; }
+        .report-table td { @apply px-4 py-4 whitespace-nowrap text-sm; }
+        .report-table tbody tr:nth-child(even) { @apply bg-white; }
+        .report-table tbody tr:nth-child(odd) { @apply bg-gray-50; }
+
+        /* Voice Note Button Animation */
+        @keyframes pulse-ring {
+          0% {
+            box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7);
+          }
+          70% {
+            box-shadow: 0 0 0 12px rgba(37, 99, 235, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+          }
+        }
+        .record-button.is-recording {
+            @apply bg-blue-600 hover:bg-blue-700 text-white;
+            animation: pulse-ring 1.5s infinite;
+        }
+
+        /* Styles for the accordion list in Due Date page */
+        .due-date-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+        .due-date-item.expanded .due-date-details {
+            max-height: 500px; /* Large enough to fit content */
+        }
+        .due-date-item.expanded .due-date-header .material-symbols-outlined {
+            transform: rotate(180deg);
+        }
+
+		/* Styles for Printing */
+        .printable-area {
+            display: none;
+        }
+		
+        /* Tab Styles */
+        .tab-button {
+            @apply -mb-px border-b-2 border-transparent px-4 py-3 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700;
+        }
+        .tab-button.active-tab {
+            @apply border-blue-600 text-blue-600;
+        }
+
+        /* Dropdown Menu Styles */
+        .menu-container {
+            position: relative;
+        }
+        .menu-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 20;
+            width: 120px;
+        }
+        .menu-container:hover .dropdown-menu {
+            display: block;
+        }
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        .dropdown-item:hover {
+            background-color: #f3f4f6; /* Gray 100 */
+        }
+        .dropdown-item .material-symbols-outlined {
+            font-size: 1.25rem;
+        }
+
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .printable-area, .printable-area * {
+                visibility: visible;
+            }
+            .printable-area {
+                display: block;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="login-screen" class="screen active-screen">
+        <div class="flex flex-col min-h-screen justify-center items-center p-4 bg-gray-50">
+            <div class="w-full max-w-sm">
+                <div class="flex justify-center items-center gap-3 mb-8"><span class="material-symbols-outlined text-4xl text-[var(--primary-color)]">minor_crash</span><h1 class="text-3xl font-bold tracking-tight text-[var(--text-primary)]">AutoFix</h1></div>
+                <div class="card space-y-6">
+                    <div class="text-center"><h2 class="text-2xl font-bold text-gray-800">Welcome Back</h2><p class="text-[var(--text-secondary)] mt-1">Please sign in to your account.</p></div>
+                    <form onsubmit="event.preventDefault(); login();">
+                        <div class="space-y-4">
+                            <div><label for="username" class="form-label">Username <span class="text-red-500">*</span></label><div class="relative"><span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">person</span><input class="form-input pl-10" id="username" placeholder="Enter your username" type="text" /></div></div>
+                            <div><label for="password" class="form-label">Password <span class="text-red-500">*</span></label><div class="relative"><span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">lock</span><input class="form-input pl-10" id="password" placeholder="Enter your password" type="password" /></div></div>
+                        </div>
+                        <div class="mt-6">
+                            <button type="submit" class="btn-primary">
+                              <span class="material-symbols-outlined">login</span>Sign In
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                 
+            </div>
+        </div>
+    </div>
+
+    <div id="admin-screens" class="screen">
+        <div id="admin-dashboard-screen" class="admin-screen active-admin-screen">
+             <header class="app-header"><div class="app-header-content"><h1 class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">Admin Dashboard</h1><button onclick="logout()" class="absolute right-4 flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--primary-color)]"><span class="font-medium text-sm hidden sm:block">Logout</span><span class="material-symbols-outlined">logout</span></button></div></header>
+            <main class="app-main grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                
+                 <a href="javascript:void(0)" onclick="showAdminScreen('admin-reports-screen')" class="card text-center items-center flex flex-col justify-center transition-all hover:shadow-xl hover:-translate-y-1"><span class="material-symbols-outlined text-5xl text-[var(--primary-color)]">assessment</span><h2 class="text-lg font-bold mt-2">Reports & Service History</h2><p class="text-sm text-[var(--text-secondary)]">View & Filter All Reports</p></a>
+                 <a href="javascript:void(0)" onclick="showAdminScreen('admin-analytics-screen')" class="card text-center items-center flex flex-col justify-center transition-all hover:shadow-xl hover:-translate-y-1"><span class="material-symbols-outlined text-5xl text-[var(--primary-color)]">monitoring</span><h2 class="text-lg font-bold mt-2">Analytics</h2><p class="text-sm text-[var(--text-secondary)]">View Complaint & Executive Stats</p></a>
+				  <a href="javascript:void(0)" onclick="showAdminScreen('admin-vehicle-management-screen')" class="card text-center items-center flex flex-col justify-center transition-all hover:shadow-xl hover:-translate-y-1"><span class="material-symbols-outlined text-5xl text-[var(--primary-color)]">minor_crash</span><h2 class="text-lg font-bold mt-2">Vehicle Management</h2><p class="text-sm text-[var(--text-secondary)]">Create & Delete Brands/Models</p></a>
+                 <a href="javascript:void(0)" onclick="showAdminScreen('admin-executive-management-screen')" class="card text-center items-center flex flex-col justify-center transition-all hover:shadow-xl hover:-translate-y-1"><span class="material-symbols-outlined text-5xl text-[var(--primary-color)]">manage_accounts</span><h2 class="text-lg font-bold mt-2">Executive Management</h2><p class="text-sm text-[var(--text-secondary)]">Create & Delete Executives</p></a>
+                 <a href="javascript:void(0)" onclick="showAdminScreen('admin-admin-management-screen')" class="card text-center items-center flex flex-col justify-center transition-all hover:shadow-xl hover:-translate-y-1"><span class="material-symbols-outlined text-5xl text-[var(--primary-color)]">admin_panel_settings</span><h2 class="text-lg font-bold mt-2">Admin Management</h2><p class="text-sm text-[var(--text-secondary)]">Manage Admins & Passwords</p></a>
+				 <a href="javascript:void(0)" onclick="showAdminScreen('admin-settings-screen')" class="card text-center items-center flex flex-col justify-center transition-all hover:shadow-xl hover:-translate-y-1">
+                    <span class="material-symbols-outlined text-5xl text-[var(--primary-color)]">toggle_on</span>
+                    <h2 class="text-lg font-bold mt-2">App Settings</h2>
+                    <p class="text-sm text-[var(--text-secondary)]">Toggle features and form fields</p>
+                </a>
+<a href="javascript:void(0)" onclick="showAdminScreen('admin-inspector-management-screen')" class="card text-center items-center flex flex-col justify-center transition-all hover:shadow-xl hover:-translate-y-1">
+    <span class="material-symbols-outlined text-5xl text-[var(--primary-color)]">fact_check</span>
+    <h2 class="text-lg font-bold mt-2">Inspector Management</h2>
+    <p class="text-sm text-[var(--text-secondary)]">Create & Delete Inspectors</p>
+</a>
+				<a href="javascript:void(0)" onclick="showAdminScreen('admin-washer-management-screen')" class="card text-center items-center flex flex-col justify-center transition-all hover:shadow-xl hover:-translate-y-1">
+                    <span class="material-symbols-outlined text-5xl text-[var(--primary-color)]">local_car_wash</span>
+                    <h2 class="text-lg font-bold mt-2">Washer Management</h2>
+                    <p class="text-sm text-[var(--text-secondary)]">Create & Delete Washers</p>
+                </a>
+				<a href="javascript:void(0)" onclick="showQuickAccessModal()" class="card text-center items-center flex flex-col justify-center transition-all hover:shadow-xl hover:-translate-y-1">
+    <span class="material-symbols-outlined text-5xl text-[var(--primary-color)]">switch_account</span>
+    <h2 class="text-lg font-bold mt-2">Quick Access</h2>
+    <p class="text-sm text-[var(--text-secondary)]">Switch to Executive/Washer View</p>
+</a>
+            </main>
+        </div>
+        
+        <div id="admin-vehicle-management-screen" class="admin-screen" style="display:none;">
+            <header class="app-header"><div class="app-header-content"><button class="absolute left-4 text-[var(--text-secondary)] hover:text-[var(--primary-color)]" onclick="showAdminScreen('admin-dashboard-screen')"><span class="material-symbols-outlined">arrow_back_ios_new</span></button><h1 class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">Vehicle Management</h1></div></header>
+            <main class="app-main">
+                <div class="card"><h2 class="text-xl font-bold mb-4">Create New Vehicle Brand & Model</h2><form id="add-vehicle-model-form" onsubmit="event.preventDefault(); addVehicleModel();" class="space-y-4">
+                    <div><label for="new-brand-admin" class="form-label">Brand <span class="text-red-500">*</span></label><input id="new-brand-admin" class="form-input" placeholder="Enter Brand (e.g., Maruti Suzuki)" required /></div>
+                    <div><label for="new-model-admin" class="form-label">Model <span class="text-red-500">*</span></label><input id="new-model-admin" class="form-input" placeholder="Enter Model (e.g., Swift)" required /></div>
+                    <button type="submit" class="btn-primary"><span class="material-symbols-outlined">add</span>Add Vehicle Model</button></form></div>
+                <div class="card space-y-3"><h2 class="text-xl font-bold">Existing Brands & Models</h2><div id="vehicle-models-list"></div></div>
+            </main>
+        </div>
+
+        <div id="admin-reports-screen" class="admin-screen" style="display: none;">
+            <header class="app-header"><div class="app-header-content"><button class="absolute left-4 text-[var(--text-secondary)] hover:text-[var(--primary-color)]" onclick="showAdminScreen('admin-dashboard-screen')"><span class="material-symbols-outlined">arrow_back_ios_new</span></button><h1 class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">Admin Reports</h1></div></header>
+            <main class="app-main">
+                <div class="card">
+                    <h2 class="text-xl font-bold mb-4">Filter Reports</h2>
+                    <div id="admin-report-filters" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+                        <div class="space-y-1">
+                            <label for="admin-filter-from-date" class="text-xs font-medium text-gray-500">From Date</label>
+                            <input type="date" id="admin-filter-from-date" class="form-input" onchange="handleDateChange('admin-filter-from-date', 'admin-filter-to-date'); applyAdminReportFilters();">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="admin-filter-to-date" class="text-xs font-medium text-gray-500">To Date</label>
+                            <input type="date" id="admin-filter-to-date" class="form-input" onchange="handleDateChange('admin-filter-from-date', 'admin-filter-to-date'); applyAdminReportFilters();">
+                        </div>
+                        
+                        <input type="text" id="admin-filter-vehicle-no" class="form-input" placeholder="Vehicle Number" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); applyAdminReportFilters()">
+                        <input type="text" id="admin-filter-brand" class="form-input" placeholder="Brand" oninput="applyAdminReportFilters()">
+                        <input type="text" id="admin-filter-exec-name" class="form-input" placeholder="Executive Name" oninput="applyAdminReportFilters()">
+                        <button onclick="clearAdminReportFilters()" class="text-sm h-11 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300">Clear Filters</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">Service History</h2>
+                        <button onclick="downloadReport()" class="flex items-center gap-1 px-3 py-1 text-sm font-bold text-white bg-green-600 rounded-lg hover:bg-green-700">
+                            <span class="material-symbols-outlined">download</span>
+                            Download Report
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table class="report-table">
+
+                            <tbody id="admin-report-table-body"></tbody>
+                        </table>
+                    </div>
+                    <p id="admin-no-reports-message" class="text-center text-gray-500 py-8 hidden">No reports found matching your criteria.</p>
+                </div>
+            </main>
+        </div>
+
+        <div id="admin-analytics-screen" class="admin-screen" style="display: none;">
+             <header class="app-header"><div class="app-header-content"><button class="absolute left-4 text-[var(--text-secondary)] hover:text-[var(--primary-color)]" onclick="showAdminScreen('admin-dashboard-screen')"><span class="material-symbols-outlined">arrow_back_ios_new</span></button><h1 class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">Analytics</h1></div></header>
+             <main class="app-main">
+                <div class="card"><h2 class="text-xl font-bold mb-4">Filter Analytics</h2><div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><select id="analytics-month-filter" class="form-input" onchange="renderAnalytics()"><option value="">All Months</option></select><select id="analytics-exec-filter" class="form-input" onchange="renderAnalytics()"><option value="">All Executives</option></select></div></div>
+                <div class="card space-y-4"><h2 id="analytics-title" class="text-xl font-bold">Overall Complaint Status</h2><div id="analytics-chart"></div></div>
+             </main>
+        </div>
+
+        <div id="admin-executive-management-screen" class="admin-screen" style="display: none;">
+            <header class="app-header"><div class="app-header-content"><button class="absolute left-4 text-[var(--text-secondary)] hover:text-[var(--primary-color)]" onclick="showAdminScreen('admin-dashboard-screen')"><span class="material-symbols-outlined">arrow_back_ios_new</span></button><h1 class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">Executive Management</h1></div></header>
+            <main class="app-main">
+                <div class="card"><h2 class="text-xl font-bold mb-4">Create New Executive</h2>
+				<form id="add-executive-form" onsubmit="event.preventDefault(); addUser('executive');" class="space-y-4">
+    <div>
+        <label for="new-executive-username" class="form-label">Username <span class="text-red-500">*</span></label>
+        <input id="new-executive-username" class="form-input" placeholder="Enter Username" required />
+    </div>
+    <div>
+        <label for="new-executive-pass" class="form-label">Password <span class="text-red-500">*</span></label>
+        <input id="new-executive-pass" class="form-input" placeholder="Enter Password" type="password" required />
+    </div>
+    <div>
+        <label for="new-exec-team" class="form-label">Team <span class="text-red-500">*</span></label>
+        <select id="new-exec-team" class="form-input" required>
+            <option value="">Select Team</option>
+            <option value="Accident">Accident</option>
+            <option value="Service">Service</option>
+            <option value="Insurance">Insurance</option>
+        </select>
+    </div>
+    <button type="submit" class="btn-primary"><span class="material-symbols-outlined">add</span>Create Executive</button>
+</form>
+				</div>
+                <div class="card space-y-3"><h2 class="text-xl font-bold">Executive List</h2><div id="executives-list"></div></div>
+            </main>
+        </div>
+
+        <div id="admin-admin-management-screen" class="admin-screen" style="display: none;">
+            <header class="app-header"><div class="app-header-content"><button class="absolute left-4 text-[var(--text-secondary)] hover:text-[var(--primary-color)]" onclick="showAdminScreen('admin-dashboard-screen')"><span class="material-symbols-outlined">arrow_back_ios_new</span></button><h1 class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">Admin Management</h1></div></header>
+            <main class="app-main">
+                <div class="card"><h2 class="text-xl font-bold mb-4">Create New Admin</h2><form id="add-admin-form" onsubmit="event.preventDefault(); addUser('admin');" class="space-y-4">
+                    <div><label for="new-admin-username" class="form-label">Username <span class="text-red-500">*</span></label><input id="new-admin-username" class="form-input" placeholder="Enter Username" required /></div>
+                    <div><label for="new-admin-pass" class="form-label">Password <span class="text-red-500">*</span></label><input id="new-admin-pass" class="form-input" placeholder="Enter Password" type="password" required /></div>
+                    <button type="submit" class="btn-primary"><span class="material-symbols-outlined">add</span>Create Admin</button></form></div>
+                <div class="card space-y-3"><h2 class="text-xl font-bold">Admin List</h2><div id="admins-list"></div></div>
+            </main>
+			</div> 
+			<div id="admin-settings-screen" class="admin-screen" style="display: none;">
+            <header class="app-header">
+                <div class="app-header-content">
+                    <button class="absolute left-4 text-[var(--text-secondary)] hover:text-[var(--primary-color)]" onclick="showAdminScreen('admin-dashboard-screen')">
+                        <span class="material-symbols-outlined">arrow_back_ios_new</span>
+                    </button>
+                    <h1 class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">App Settings</h1>
+                </div>
+            </header>
+            <main class="app-main">
+                <div class="card">
+                     <div class="relative">
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+                        <input type="text" id="settings-search-input" oninput="filterSettings()" placeholder="Search settings..." class="form-input pl-10">
+                    </div>
+                </div>
+                <div id="settings-container" class="space-y-6">
+                    <p class="text-center text-gray-500 py-8">Loading settings...</p>
+                </div>
+            </main>
+        </div>
+		<div id="admin-washer-management-screen" class="admin-screen" style="display: none;">
+            <header class="app-header">
+                <div class="app-header-content">
+                    <button class="absolute left-4 text-[var(--text-secondary)] hover:text-[var(--primary-color)]" onclick="showAdminScreen('admin-dashboard-screen')">
+                        <span class="material-symbols-outlined">arrow_back_ios_new</span>
+                    </button>
+                    <h1 class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">Washer Management</h1>
+                </div>
+            </header>
+            <main class="app-main">
+                <div class="card">
+                    <h2 class="text-xl font-bold mb-4">Create New Washer</h2>
+                    <form id="add-washer-form" onsubmit="event.preventDefault(); addUser('washer');" class="space-y-4">
+                        <div><label for="new-washer-username" class="form-label">Username <span class="text-red-500">*</span></label><input id="new-washer-username" class="form-input" placeholder="Enter Username" required /></div>
+                        <div><label for="new-washer-pass" class="form-label">Password <span class="text-red-500">*</span></label><input id="new-washer-pass" class="form-input" placeholder="Enter Password" type="password" required /></div>
+                        <button type="submit" class="btn-primary"><span class="material-symbols-outlined">add</span>Create Washer</button>
+                    </form>
+                </div>
+                <div class="card space-y-3">
+                    <h2 class="text-xl font-bold">Washer List</h2>
+                    <div id="washers-list"></div>
+                </div>
+            </main>
+        </div>
+		
+<div id="admin-inspector-management-screen" class="admin-screen" style="display: none;">
+    <header class="app-header">
+        <div class="app-header-content">
+            <button class="absolute left-4 text-[var(--text-secondary)] hover:text-[var(--primary-color)]" onclick="showAdminScreen('admin-dashboard-screen')">
+                <span class="material-symbols-outlined">arrow_back_ios_new</span>
+            </button>
+            <h1 class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">Inspector Management</h1>
+        </div>
+    </header>
+    <main class="app-main">
+        <div class="card">
+            <h2 class="text-xl font-bold mb-4">Create New Inspector</h2>
+            <form id="add-inspector-form" onsubmit="event.preventDefault(); addUser('inspector');" class="space-y-4">
+                <div><label for="new-inspector-username" class="form-label">Username <span class="text-red-500">*</span></label><input id="new-inspector-username" class="form-input" placeholder="Enter Username" required /></div>
+                <div><label for="new-inspector-pass" class="form-label">Password <span class="text-red-500">*</span></label><input id="new-inspector-pass" class="form-input" placeholder="Enter Password" type="password" required /></div>
+                <button type="submit" class="btn-primary"><span class="material-symbols-outlined">add</span>Create Inspector</button>
+            </form>
+        </div>
+        <div class="card space-y-3">
+            <h2 class="text-xl font-bold">Inspector List</h2>
+            <div id="inspectors-list"></div>
+        </div>
+    </main>
+</div>
+
+        </div>
+    </div>
+<div id="quick-access-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-hidden">
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm" onclick="hideModal('quick-access-modal')"></div>
+    <div class="relative bg-white rounded-lg p-6 w-full max-w-md m-4 space-y-4">
+        <div class="flex justify-between items-center">
+            <h3 class="text-xl font-bold text-gray-800">Quick Access</h3>
+            <button onclick="hideModal('quick-access-modal')" class="text-gray-500 hover:text-gray-700">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <p class="text-gray-600">Select user type to access their interface:</p>
+        <div id="quick-access-users" class="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+            <!-- Will be populated by JavaScript -->
+        </div>
+        <div class="flex justify-end gap-3 pt-4 border-t">
+            <button onclick="hideModal('quick-access-modal')" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+    <div id="executive-screens" class="screen">
+       <header class="app-header">
+    <div class="app-header-content">
+        <h1 id="executive-header-title" class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">Job Card</h1>
+    </div>
+</header>
+
+        <div id="job-card-screen" class="executive-screen active-executive-screen">
+             <main class="app-main">
+                <div class="card">
+                    <h2 class="text-xl font-bold mb-4">Vehicle No:</h2>
+                    <input type="file" id="image-upload-input" class="hidden" accept="image/*" capture="environment" onchange="handleImageUpload(event)">
+                    <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <input id="search-vehicle-number" type="text" placeholder="Enter Vehicle Number (e.g., KL07AB1234)" class="form-input flex-grow min-w-0" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '')">
+                        <button onclick="document.getElementById('image-upload-input').click()" class="btn-secondary !w-auto flex-shrink-0 !py-2 !px-3">
+                            <span class="material-symbols-outlined text-base sm:text-lg">photo_camera</span>
+                            <span class="hidden sm:inline text-sm ml-1">Scan</span>
+                        </button>
+                        <button onclick="searchVehicle()" class="btn-primary !w-auto flex-shrink-0 !py-2 !px-3">
+                            <span class="material-symbols-outlined text-base sm:text-lg">search</span>
+                            <span class="hidden sm:inline text-sm ml-1">Search</span>
+                        </button>
+                    </div>
+                    <p id="search-error" class="text-red-500 text-sm mt-2 hidden"></p>
+                </div>
+                
+                <div id="vehicle-details-section" class="card hidden space-y-4"><h2 class="text-xl font-bold flex items-center gap-2 text-green-600"><span class="material-symbols-outlined">check_circle</span> Vehicle Found</h2><div class="grid grid-cols-2 gap-x-4 gap-y-3 text-base border-t pt-4">
+                    <div><p class="font-medium text-[var(--text-secondary)]">Vehicle Number</p><p id="detail-vehicle-number" class="font-bold text-lg"></p></div>
+                    <div><p class="font-medium text-[var(--text-secondary)]">Vehicle Name</p><p id="detail-vehicle-name" class="font-semibold"></p></div>
+                    <div><p class="font-medium text-[var(--text-secondary)]">Brand</p><p id="detail-brand" class="font-semibold"></p></div>
+                    <div><p class="font-medium text-[var(--text-secondary)]">Model</p><p id="detail-model" class="font-semibold"></p></div>
+                    <div><p class="font-medium text-[var(--text-secondary)]">Color</p><p id="detail-color" class="font-semibold"></p></div>
+                    <div><p class="font-medium text-[var(--text-secondary)]">Fuel Type</p><p id="detail-fuel-type" class="font-semibold"></p></div>
+                    <div><p class="font-medium text-[var(--text-secondary)]">Engine No.</p><p id="detail-engine-no" class="font-semibold"></p></div>
+                    <div><p class="font-medium text-[var(--text-secondary)]">Chassis No.</p><p id="detail-chassis-no" class="font-semibold"></p></div>
+                    <div class="col-span-2">
+                        <p class="font-medium text-[var(--text-secondary)]">Client Name</p>
+                        <div id="client-name-wrapper">
+                             <p id="detail-client-name" class="font-semibold"></p>
+                        </div>
+                    </div>
+                    <div class="col-span-2">
+                        <p class="font-medium text-[var(--text-secondary)]">Client Phone</p>
+                        <div id="client-phone-wrapper">
+                            <p id="detail-client-phone" class="font-semibold"></p>
+                        </div>
+                    </div>
+                    <div class="col-span-2">
+                        <div class="flex items-center justify-between mb-1">
+                            <p class="font-medium text-[var(--text-secondary)]">Odometer Reading</p>
+                            <span id="odometer-warning" class="text-xs text-red-600 font-medium italic hidden"></span>
+                        </div>
+                        <div id="odometer-display-wrapper">
+                            <p id="detail-odometer" class="font-semibold"></p>
+                        </div>
+                    </div>
+                </div></div>
+                
+                <div id="create-vehicle-section" class="card hidden space-y-4">
+                    <h2 class="text-xl font-bold flex items-center gap-2 text-orange-600"><span class="material-symbols-outlined">add_circle</span> Register New Vehicle</h2>
+                    <p class="text-sm text-gray-500 -mt-2">Vehicle not found. Please add the details below to register it.</p>
+                    <form id="create-vehicle-form" onsubmit="event.preventDefault(); createVehicle();" class="border-t pt-4"><div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label class="form-label">Vehicle Number</label><input id="new-vehicle-number" type="text" class="form-input bg-gray-100" readonly></div>
+                    <div><label class="form-label">Vehicle Name</label><input id="new-vehicle-name" type="text" class="form-input" placeholder="e.g., Swift VXI" ></div>
+                    <div><label class="form-label">Brand <span class="text-red-500">*</span></label><select id="new-vehicle-brand-exec" class="form-input" required onchange="populateModelDropdown()"></select></div>
+                    <div><label class="form-label">Model <span class="text-red-500">*</span></label><select id="new-vehicle-model-exec" class="form-input" required></select></div>
+                    <div><label class="form-label">Color</label><input id="new-color" type="text" class="form-input" placeholder="e.g., White" ></div>
+                    <div><label class="form-label">Fuel Type <span class="text-red-500">*</span></label><select id="new-fuel-type" class="form-input" required><option value="">Select Type</option><option>Petrol</option><option>Diesel</option><option>CNG</option><option>Electric</option></select></div>
+                    <div><label class="form-label">Engine Number <span class="text-red-500">*</span></label><input id="new-engine-no" type="text" class="form-input" placeholder="Enter engine number" required></div>
+                    <div><label class="form-label">Chassis Number <span class="text-red-500">*</span></label><input id="new-chassis-no" type="text" class="form-input" placeholder="Enter chassis number" required></div>
+                    <div class="sm:col-span-2"><label class="form-label">Odometer Reading (km) <span class="text-red-500">*</span></label><input id="new-odometer" type="number" class="form-input" placeholder="e.g., 54000" required></div>
+                    <div class="sm:col-span-2 border-t pt-4"><label class="form-label">Client Name <span class="text-red-500">*</span></label><input id="new-client-name" type="text" class="form-input" placeholder="e.g., John Doe" required></div>
+                    <div class="sm:col-span-2">
+                        <label class="form-label">Client Phone <span class="text-red-500">*</span></label>
+                        <input id="new-client-phone" type="tel" class="form-input" placeholder="e.g., 9876543210" required maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                    </div>
+                </div><div class="mt-6"><button type="submit" class="btn-primary"><span class="material-symbols-outlined">save</span>Save Vehicle</button></div></form></div>
+                
+                <div id="new-complaint-section" class="card hidden">
+                    <h2 class="text-xl font-bold mb-4">Register New Complaint(s)</h2>
+                    <div class="border-t pt-4 space-y-4">
+                        <div id="complaints-list" class="space-y-2">
+                            <p class="text-sm text-gray-500">No complaints added yet.</p>
+                        </div>
+                        <!-- REPLACE this div inside #new-complaint-section -->
+<!-- New simplified input for the Job Card page -->
+<div class="flex items-center gap-2">
+    <input id="complaint-input" type="text" class="form-input flex-grow" placeholder="e.g., Engine noise on startup">
+    <button type="button" onclick="addComplaint()" class="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 shrink-0">
+        <span class="material-symbols-outlined">add</span>
+    </button>
+</div>
+                        
+                        <div class="mt-4 pt-4 border-t">
+                          <label class="form-label">Mark Damages on Vehicle</label>
+                          <div class="relative inline-block border border-gray-300 rounded-lg overflow-hidden">
+							<img src="https://thumbs.dreamstime.com/b/car-line-art-ilustration-vector-car-line-art-ilustration-vector-car-line-art-ilustration-vector-118291586.jpg?w=768" id="carImage" alt="Car Outline" class="block w-full max-w-sm bg-white" crossorigin="anonymous"/>
+							<canvas id="damageCanvas" class="absolute top-0 left-0"></canvas>
+							<canvas id="checkCanvas" class="hidden"></canvas>
+						  </div>
+                          <p class="text-sm text-gray-500 mt-2">Click on the car image to mark scratches/damages.</p>
+                          <div class="flex items-center gap-3 mt-3">
+    <!-- MODIFIED "Undo" BUTTON -->
+    <button type="button" onclick="undoLastMark()" class="inline-flex items-center gap-1 rounded-lg bg-blue-100 text-blue-700 font-bold py-1.5 px-3 text-xs shadow-sm hover:bg-blue-200 transition-colors">
+        <span class="material-symbols-outlined !text-base">undo</span>
+        <span>Undo Last</span>
+    </button>
+    <!-- MODIFIED "Clear" BUTTON -->
+    <button type="button" onclick="clearDamageCanvas()" class="inline-flex items-center gap-1 rounded-lg bg-red-100 text-red-700 font-bold py-1.5 px-3 text-xs shadow-sm hover:bg-red-200 transition-colors">
+        <span class="material-symbols-outlined !text-base">delete_sweep</span>
+        <span>Clear All</span>
+    </button>
+</div>
+                        
+                        <!-- The updated section with smaller, blue buttons -->
+<div class="mt-4 pt-4 border-t space-y-3">
+    <label class="form-label">Attach Photos & Voice Note</label>
+    <!-- Photo Upload -->
+    <div>
+        <input type="file" id="photo-upload-input" multiple accept="image/*" class="hidden" onchange="handlePhotoUploads(event)">
+        <!-- MODIFIED BUTTON -->
+        <button type="button" onclick="document.getElementById('photo-upload-input').click()" class="inline-flex items-center gap-1 rounded-lg bg-blue-100 text-blue-700 font-bold py-1.5 px-3 text-xs shadow-sm hover:bg-blue-200 transition-colors">
+            <span class="material-symbols-outlined !text-base">add_a_photo</span>
+            <span>Add Photos</span>
+        </button>
+        <div id="photo-previews" class="mt-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3"></div>
+    </div>
+    <!-- Voice Note -->
+    <div>
+        <div class="flex items-center gap-3">
+            <!-- MODIFIED BUTTON -->
+            <button id="record-toggle-btn" type="button" onclick="handleRecordingToggle()" class="record-button inline-flex items-center gap-1 rounded-lg bg-blue-100 text-blue-700 font-bold py-1.5 px-3 text-xs shadow-sm hover:bg-blue-200 transition-colors duration-300">
+                <span id="record-icon" class="material-symbols-outlined !text-base">mic</span>
+                <span id="record-text">Record Note</span>
+            </button>
+        </div>
+        <div id="audio-playback" class="mt-3"></div>
+         <p id="recording-status" class="text-sm text-gray-500 mt-1"></p>
+    </div>
+</div>
+
+                        <div class="mt-6">
+                            <button onclick="saveComplaints()" class="btn-primary"><span class="material-symbols-outlined">add_task</span>Save Complaints & Media</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+<div id="vehicle-update-screen" class="executive-screen" style="display: none;">
+    <main class="app-main">
+        <div id="update-tab-container">
+            <div class="flex border-b border-gray-200 px-5">
+                <button id="tab-btn-pending" class="tab-button active-tab" onclick="showUpdateTab('pending')">Pending Jobs</button>
+                <button id="tab-btn-awaiting" class="tab-button" onclick="showUpdateTab('awaiting')">Awaiting Response</button>
+                <button id="tab-btn-responses" class="tab-button" onclick="showUpdateTab('responses')">Responses Received</button>
+            </div>
+            <div class="p-5">
+                <div id="pending-jobs-panel" class="tab-panel">
+                    <div id="not-started-jobs-list" class="space-y-3"></div>
+                    <p id="no-pending-jobs-message" class="text-center text-gray-500 py-8 hidden">No jobs are currently pending.</p>
+                </div>
+                <div id="awaiting-response-panel" class="tab-panel hidden">
+                    <div id="awaiting-response-list" class="space-y-3"></div>
+                    <p id="no-awaiting-response-message" class="text-center text-gray-500 py-8 hidden">No jobs are awaiting customer response.</p>
+                </div>
+                <div id="responses-received-panel" class="tab-panel hidden">
+                    <div id="customer-response-list" class="space-y-3"></div>
+                    <p id="no-customer-response-message" class="text-center text-gray-500 py-8 hidden">No responses received from customers yet.</p>
+                </div>
+            </div>
+        </div>
+
+                <div id="update-details-section" class="card hidden space-y-4">
+                    <h2 class="text-xl font-bold flex items-center gap-2 text-green-600"><span class="material-symbols-outlined">check_circle</span> Selected Report</h2>
+                    <div class="grid grid-cols-2 gap-4 text-base border-t pt-4">
+                        <div><p class="font-medium text-[var(--text-secondary)]">Vehicle Number</p><p id="update-detail-number" class="font-bold text-lg"></p></div>
+                        <div><p class="font-medium text-[var(--text-secondary)]">Total Complaints</p><p id="update-detail-complaint" class="font-semibold"></p></div>
+                    </div>
+                    <div id="original-complaints-display" class="border-t pt-4 hidden">
+                        <h3 class="font-bold text-gray-700 mb-2">Registered Complaints:</h3>
+                        <ul id="original-complaints-list" class="list-disc list-inside text-gray-600 space-y-1"></ul>
+                    </div>
+                    <div id="customer-feedback-display" class="border-t pt-4 hidden">
+                        <h3 class="font-bold text-green-700 mb-2 flex items-center gap-2"><span class="material-symbols-outlined">rate_review</span> Customer Feedback Received:</h3>
+                        <div id="customer-feedback-text-display" class="text-gray-600 bg-gray-50 p-3 rounded-lg hidden"></div>
+                        <div id="customer-feedback-audio-display" class="mt-2 hidden"></div>
+                    </div>
+                </div>
+                <!-- REPLACE this entire div -->
+<!-- REPLACE this entire div -->
+<div id="update-form-section" class="card hidden">
+    <form onsubmit="event.preventDefault(); saveVehicleUpdate();" class="space-y-6">
+        
+        <div id="customer-complaints-update-section">
+            <h3 class="text-base font-bold mb-2">Customer's Registered Complaints</h3>
+            <div id="customer-complaints-list" class="space-y-2">
+                <p class="text-sm text-gray-500">No original complaints were registered.</p>
+            </div>
+        </div>
+        
+        <!-- The new, cleaner layout for adding mechanic suggestions -->
+<!-- This new layout ensures the repair input is always wide enough -->
+<div  class="border-t pt-4">
+    <label class="form-label">Add New Suggested Repair (from Mechanic)</label>
+    <!-- This container will now stack its children vertically on small screens -->
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-3 bg-gray-100 rounded-lg">
+        
+        <!-- The complaint input will take full width on all screen sizes -->
+        <input id="suggestion-input" type="text" class="form-input !py-1 !px-2 flex-grow" placeholder="e.g., Change engine oil">
+        
+        <!-- This group contains the amount and button, and will appear below the input on small screens -->
+        <div class="flex items-center justify-end gap-2 shrink-0">
+            <label for="suggestion-amount-input" class="font-bold text-gray-500">₹</label>
+            <input id="suggestion-amount-input" type="number" class="form-input !py-1 !px-2 w-24 text-right" placeholder="Cost">
+            <button type="button" onclick="addSuggestion()" class="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200">
+                <span class="material-symbols-outlined">add</span>
+            </button>
+        </div>
+    </div>
+    <div id="executive-suggestions-list" class="mt-3 space-y-2"></div>
+</div>
+
+        <div>
+            <h3 class="text-base font-bold mb-2 border-t pt-4">Customer Approved suggestions</h3>
+            <div id="customer-approval-list" class="space-y-2">
+                <p class="text-sm text-gray-500">Add mechanic suggestions above to see them here for approval.</p>
+            </div>
+        </div>
+        
+        <div class="border-t pt-4">
+            <label class="form-label">Approximate Service Amount</label>
+            <p id="approx-total-amount" class="text-2xl font-bold text-gray-800">₹ 0.00</p>
+            <p class="text-xs text-gray-500">This is an estimated total based on all customer complaints and suggested repairs.</p>
+        </div>
+
+        
+
+        <div>
+            <label for="delivery-date" class="form-label border-t pt-4">Expected Delivery Date <span class="text-red-500">*</span></label>
+            <input id="delivery-date" type="date" class="form-input" required>
+        </div>
+        
+        <div class="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button type="submit" class="btn-primary">
+                <span class="material-symbols-outlined">save</span>Save Update
+            </button>
+            <button type="button" id="send-whatsapp-btn" onclick="sendApprovalLink()" class="btn-whatsapp">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.003-5.462-4.415-9.89-9.881-9.894-5.462-.004-9.89 4.415-9.894 9.881-.002 2.225.651 3.891 1.746 5.634l-.999 3.648 3.747-.976zm11.387-5.464c-.074-.124-.272-.198-.568-.347-.297-.149-1.758-.868-2.03-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.149-.173.198-.297.297-.495.099-.198.05-.372-.025-.521-.074-.149-.669-1.611-.916-2.206-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.262.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"></path>
+                </svg>
+                Send Approval via WhatsApp
+            </button>
+        </div>
+    </form>
+</div>
+            </main>
+        </div>
+        
+        <div id="report-screen" class="executive-screen" style="display: none;">
+            <main class="app-main">
+                <div class="card">
+                    <h2 class="text-xl font-bold mb-4">Filter Reports</h2>
+<div id="report-filters" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
+    <div class="space-y-1">
+        <label for="filter-from-date" class="text-xs font-medium text-gray-500">From Date</label>
+        <input type="date" id="filter-from-date" class="form-input" onchange="handleDateChange('filter-from-date', 'filter-to-date'); applyReportFilters();">
+    </div>
+    <div class="space-y-1">
+        <label for="filter-to-date" class="text-xs font-medium text-gray-500">To Date</label>
+        <input type="date" id="filter-to-date" class="form-input" onchange="handleDateChange('filter-from-date', 'filter-to-date'); applyReportFilters();">
+    </div>
+    <input type="text" id="filter-vehicle-no" class="form-input" placeholder="Vehicle Number" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); applyReportFilters()">
+    <input type="text" id="filter-brand" class="form-input" placeholder="Brand" oninput="applyReportFilters()">
+    <button onclick="clearReportFilters()" class="text-sm h-11 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300">Clear Filters</button>
+</div>
+                </div>
+                <div class="card">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">Service History</h2>
+                        <button onclick="downloadReport()" class="flex items-center gap-1 px-3 py-1 text-sm font-bold text-white bg-green-600 rounded-lg hover:bg-green-700">
+                            <span class="material-symbols-outlined">download</span>
+                            Download Report
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table class="report-table">
+
+                            <tbody id="report-table-body"></tbody>
+                        </table>
+                    </div>
+                    <p id="no-reports-message" class="text-center text-gray-500 py-8 hidden">No reports found matching your criteria.</p>
+                </div>
+            </main>
+        </div>
+<div id="due-date-screen" class="executive-screen" style="display: none;">
+    <main class="app-main">
+        <div class="card !p-0">
+            <div class="flex border-b border-gray-200 px-5">
+                <button id="tab-btn-ready-to-close" class="tab-button active-tab" onclick="showCloseTab('ready-to-close')">
+                    Ready to Close
+                </button>
+                <button id="tab-btn-inspection-pending" class="tab-button" onclick="showCloseTab('inspection-pending')">
+                    Inspection Pending
+                </button>
+                <button id="tab-btn-wash-pending" class="tab-button" onclick="showCloseTab('wash-pending')">
+                    Wash Pending
+                </button>
+                <button id="tab-btn-complete" class="tab-button" onclick="showCloseTab('complete')">
+                    Complete
+                </button>
+            </div>
+            <div class="p-5">
+<div id="ready-to-close-panel" class="tab-panel">
+    <div id="ready-to-close-list" class="space-y-3"></div>
+    <p id="no-ready-to-close-message" class="text-center text-gray-500 py-8 hidden">No jobs are ready for the next step.</p>
+</div>
+
+<div id="inspection-pending-panel" class="tab-panel hidden space-y-6">
+    <div id="rejected-jobs-section">
+        <h3 class="text-lg font-bold text-red-700 mb-2">Rejected by Inspector</h3>
+        <div id="rejected-jobs-list" class="space-y-3"></div>
+        <p id="no-rejected-jobs-message" class="text-center text-gray-500 py-4 hidden">No jobs have been rejected.</p>
+    </div>
+    <div id="pending-inspection-section" class="border-t pt-4">
+        <h3 class="text-lg font-bold text-gray-700 mb-2">Pending Inspection</h3>
+        <div id="pending-inspection-list" class="space-y-3"></div>
+        <p id="no-inspection-pending-message" class="text-center text-gray-500 py-4 hidden">No jobs are currently pending for inspection.</p>
+    </div>
+</div>
+
+<div id="wash-pending-panel" class="tab-panel hidden">
+    <div id="wash-pending-list" class="space-y-3"></div>
+    <p id="no-wash-pending-message" class="text-center text-gray-500 py-8 hidden">No jobs are pending for wash.</p>
+</div>
+
+<div id="complete-panel" class="tab-panel hidden">
+    <div id="complete-list" class="space-y-3"></div>
+    <p id="no-complete-message" class="text-center text-gray-500 py-8 hidden">No jobs are ready for completion.</p>
+</div>
+            </div>
+        </div>
+    </main>
+</div>
+        <div id="profile-screen" class="executive-screen" style="display: none;">
+            <main class="app-main">
+                <div class="card">
+                    <div class="flex flex-col items-center">
+                        <div class="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center mb-4"><span class="material-symbols-outlined text-6xl text-blue-600">person</span></div>
+                        <h2 id="profile-username" class="text-2xl font-bold"></h2>
+                        <p id="profile-role" class="text-[var(--text-secondary)] capitalize"></p>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2 class="text-xl font-bold mb-4">Google Drive Integration</h2>
+                    <div id="gdrive-auth-section" class="w-full text-center border-t pt-4">
+                        <p class="text-sm text-gray-600 mb-2">Manage access for media uploads.</p>
+                        <button id="auth-button" onclick="handleAuthClick()" class="bg-white border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-gray-50 flex items-center justify-center gap-2 w-full">
+                            <svg class="w-5 h-5" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
+                            Authorize Google Drive
+                        </button>
+                        <button id="signout-button" onclick="handleSignoutClick()" class="hidden bg-red-100 text-red-700 font-semibold py-2 px-4 rounded-lg w-full mt-2">
+                            Sign Out of Google Drive
+                        </button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2 class="text-xl font-bold mb-4">Reset Password</h2>
+                    <form onsubmit="event.preventDefault(); resetPassword();" class="space-y-4 border-t pt-4">
+                        <div><label class="form-label">Current Password <span class="text-red-500">*</span></label><input id="current-password" type="password" class="form-input" required></div>
+                        <div><label class="form-label">New Password <span class="text-red-500">*</span></label><input id="new-password" type="password" class="form-input" required></div>
+                        <div><label class="form-label">Confirm New Password <span class="text-red-500">*</span></label><input id="confirm-new-password" type="password" class="form-input" required></div>
+                        <div class="pt-2"><button type="submit" class="btn-primary"><span class="material-symbols-outlined">lock_reset</span>Reset Password</button></div>
+                    </form>
+                </div>
+                 <div class="card">
+                    <button onclick="logout()" class="w-full flex justify-center items-center gap-2 text-red-600 font-bold py-3 px-4 rounded-lg hover:bg-red-50"><span class="material-symbols-outlined">logout</span>Logout</button>
+                 </div>
+            </main>
+        </div>
+
+        <footer class="bottom-nav">
+             <div class="max-w-5xl mx-auto flex justify-around">
+                <a href="javascript:void(0)" class="nav-item active" data-target="job-card-screen" onclick="showExecutiveScreen('job-card-screen')"><span class="material-symbols-outlined">description</span><span>Job Card</span></a>
+                <a href="javascript:void(0)" class="nav-item" data-target="vehicle-update-screen" onclick="showExecutiveScreen('vehicle-update-screen')"><span class="material-symbols-outlined">update</span><span>Update</span></a>
+                <a href="javascript:void(0)" class="nav-item" data-target="report-screen" onclick="showExecutiveScreen('report-screen')"><span class="material-symbols-outlined">assessment</span><span>Report</span></a>
+                <a href="javascript:void(0)" class="nav-item" data-target="due-date-screen" onclick="showExecutiveScreen('due-date-screen')"><span class="material-symbols-outlined">event_available</span><span>Close</span></a>
+                <a href="javascript:void(0)" class="nav-item" data-target="profile-screen" onclick="showExecutiveScreen('profile-screen')"><span class="material-symbols-outlined">person</span><span>Profile</span></a>
+            </div>
+        </footer>
+    </div>
+</div> 
+<div id="washer-screen" class="screen">
+    <header class="app-header">
+        <div class="app-header-content">
+            <h1 class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">Wash Queue</h1>
+            <button onclick="logout()" class="absolute right-4 flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--primary-color)]">
+                <span class="font-medium text-sm hidden sm:block">Logout</span>
+                <span class="material-symbols-outlined">logout</span>
+            </button>
+        </div>
+    </header>
+    <main class="app-main">
+        <div id="wash-queue-list" class="space-y-3">
+            </div>
+        <p id="no-wash-jobs-message" class="text-center text-gray-500 py-8 hidden">No vehicles are currently in the wash queue.</p>
+    </main>
+</div>
+<div id="inspector-screen" class="screen">
+    <header class="app-header">
+        <div class="app-header-content">
+            <h1 class="text-2xl font-bold text-[var(--primary-color)] flex-1 text-center">Inspection Queue</h1>
+            <button onclick="logout()" class="absolute right-4 flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--primary-color)]">
+                <span class="font-medium text-sm hidden sm:block">Logout</span>
+                <span class="material-symbols-outlined">logout</span>
+            </button>
+        </div>
+    </header>
+    <main class="app-main">
+        <div id="inspection-queue-list" class="space-y-3">
+            </div>
+        <p id="no-inspection-jobs-message" class="text-center text-gray-500 py-8 hidden">No vehicles are currently in the inspection queue.</p>
+    </main>
+</div>
+
+<div id="inspection-remarks-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-hidden">
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
+    <div class="relative bg-white rounded-lg p-6 w-full max-w-md m-4 space-y-4">
+        <h3 id="remarks-modal-title" class="text-xl font-bold text-gray-800">Inspection Remarks</h3>
+        <p id="remarks-modal-text" class="text-gray-600"></p>
+        <div>
+            <label for="inspection-remarks-input" class="form-label">Remarks (Required):</label>
+            <textarea id="inspection-remarks-input" class="form-input" rows="3" placeholder="Enter remarks..."></textarea>
+        </div>
+        <div class="flex justify-end gap-4 pt-4">
+            <button onclick="hideModal('inspection-remarks-modal')" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold">Cancel</button>
+            <button id="confirm-inspection-button" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold">Confirm</button>
+        </div>
+    </div>
+</div>
+<div id="inspector-details-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-hidden">
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm" onclick="hideModal('inspector-details-modal')"></div>
+    <div class="relative bg-white rounded-lg p-6 w-full max-w-lg m-4 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center pb-3 border-b">
+            <h3 class="text-xl font-bold text-gray-800">Inspection Details</h3>
+            <button onclick="hideModal('inspector-details-modal')" class="text-gray-500 hover:text-gray-700">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <div>
+                <p class="font-medium text-gray-500">Vehicle Number</p>
+                <p id="inspector-modal-vehicle-no" class="font-bold text-base text-gray-800"></p>
+            </div>
+            <div>
+                <p class="font-medium text-gray-500">Executive</p>
+                <p id="inspector-modal-executive" class="font-semibold text-base text-gray-800"></p>
+            </div>
+        </div>
+
+        <div class="pt-2">
+            <h4 class="font-bold text-gray-700 mb-2">Customer Complaints</h4>
+            <div id="inspector-modal-complaints" class="space-y-1 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg"></div>
+        </div>
+        
+        <div class="pt-2">
+            <h4 class="font-bold text-gray-700 mb-2">Mechanic's Suggested Repairs</h4>
+            <div id="inspector-modal-suggestions" class="space-y-1 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg"></div>
+        </div>
+
+        <div id="inspector-modal-actions" class="flex flex-col sm:flex-row sm:justify-end gap-3 pt-4 border-t">
+            </div>
+    </div>
+</div>
+    
+    <!-- Customer Approval Screen -->
+    <div id="customer-approval-screen" class="screen">
+        <div class="flex flex-col min-h-screen justify-center items-center p-4 bg-gray-50">
+            <div class="w-full max-w-lg">
+                <div class="flex justify-center items-center gap-3 mb-8">
+                    <span class="material-symbols-outlined text-4xl text-[var(--primary-color)]">minor_crash</span>
+                    <h1 class="text-3xl font-bold tracking-tight text-[var(--text-primary)]">AutoFix Service Approval</h1>
+                </div>
+                <div id="customer-approval-card" class="card space-y-6">
+                    <div class="text-center">
+                        <h2 class="text-2xl font-bold text-gray-800">Review & Approve Repairs</h2>
+                        <p class="text-[var(--text-secondary)] mt-1">For Vehicle: <span id="approval-vehicle-no" class="font-bold"></span></p>
+                    </div>
+                    
+                    <div id="approval-content" class="space-y-4">
+                        <div>
+                            <h3 class="font-bold text-gray-700 mb-2">Suggested Repairs:</h3>
+                            <p class="text-sm text-gray-500 -mt-2 mb-3">Please select the services you wish to approve.</p>
+                            <div id="approval-suggestions-list" class="space-y-2 border-t pt-3">
+                                <!-- Suggestions will be populated here -->
+                            </div>
+							<!-- Find the div with id="approval-suggestions-list" and ADD this div right after it -->
+				<div class="border-t pt-4 mt-4">
+				<div class="flex justify-between items-center">
+					<label class="form-label mb-0 font-bold text-lg">Estimated Total:</label>
+					<p id="cust-total-amount" class="text-2xl font-bold text-gray-800">₹ 0.00</p>
+			</div>
+			<p class="text-xs text-gray-500 text-right">Based on your selected services.</p>
+				</div>
+                        </div>
+
+                        <div class="border-t pt-4">
+                            <label for="customer-feedback-text" class="form-label">Your Feedback (Optional):</label>
+                            <textarea id="customer-feedback-text" class="form-input" rows="3" placeholder="Let us know if you have any other comments..."></textarea>
+                        </div>
+                        
+                        <div class="border-t pt-4">
+    <label class="form-label">Record a Voice Note (Optional):</label>
+    <div class="flex items-center gap-3">
+        <!-- MODIFIED BUTTON -->
+        <button id="cust-approval-record-btn" type="button" onclick="handleCustomerApprovalRecordingToggle()" class="record-button inline-flex items-center gap-1 rounded-lg bg-blue-100 text-blue-700 font-bold py-1.5 px-3 text-xs shadow-sm hover:bg-blue-200 transition-colors duration-300">
+            <span id="cust-approval-record-icon" class="material-symbols-outlined !text-base">mic</span>
+            <span id="cust-approval-record-text">Record</span>
+        </button>
+    </div>
+    <div id="customer-audio-playback" class="mt-3"></div>
+    <p id="customer-recording-status" class="text-sm text-gray-500 mt-1"></p>
+</div>
+
+                        <div class="mt-6 border-t pt-6">
+                             <button onclick="submitCustomerFeedback()" class="btn-primary">
+                                <span class="material-symbols-outlined">thumb_up</span> Submit Approval & Feedback
+                            </button>
+                        </div>
+                    </div>
+                     <div id="approval-success-message" class="hidden text-center p-4 bg-green-100 text-green-800 rounded-lg">
+                        <h3 class="font-bold text-xl">Thank You!</h3>
+                        <p>Your response has been submitted successfully.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="success-message" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-full shadow-lg hidden flex items-center gap-2 transition-transform duration-300 transform"><span class="material-symbols-outlined">check_circle</span><span id="success-text"></span></div>
+    <div id="error-message" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-full shadow-lg hidden flex items-center gap-2 transition-transform duration-300 transform"><span class="material-symbols-outlined">error</span><span id="error-text"></span></div>
+	
+<div id="customer-feedback-screen" class="screen">
+    <div class="flex flex-col min-h-screen justify-center items-center p-4 bg-gray-50">
+        <div class="w-full max-w-lg">
+            <div class="flex justify-center items-center gap-3 mb-8">
+                <span class="material-symbols-outlined text-4xl text-[var(--primary-color)]">rate_review</span>
+                <h1 class="text-3xl font-bold tracking-tight text-[var(--text-primary)]">AutoFix Service Feedback</h1>
+            </div>
+            <div class="card space-y-6">
+                <div class="text-center">
+                    <h2 class="text-2xl font-bold text-gray-800">Share Your Feedback</h2>
+                    <p class="text-[var(--text-secondary)] mt-1">For Vehicle: <span id="feedback-vehicle-no" class="font-bold"></span></p>
+                </div>
+                <div id="feedback-form-content" class="space-y-4">
+                    <div class="border-t pt-4">
+                        <label for="customer-feedback-input" class="form-label">Please share your experience with us:</label>
+                        <textarea id="customer-feedback-input" class="form-input" rows="4" placeholder="Your feedback is important to us..."></textarea>
+                    </div>
+                    <div class="mt-6">
+                         <button onclick="submitCustomerTextFeedback()" class="btn-primary">
+                            <span class="material-symbols-outlined">send</span> Submit Feedback
+                        </button>
+                    </div>
+                </div>
+                 <div id="feedback-success-message" class="hidden text-center p-4 bg-green-100 text-green-800 rounded-lg">
+                    <h3 class="font-bold text-xl">Thank You!</h3>
+                    <p>Your feedback has been submitted successfully. We appreciate you taking the time to help us improve.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+    
+    <div id="scanner-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-hidden">
+        <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" onclick="closeScannerModal()"></div>
+        <div class="relative bg-white rounded-lg p-4 w-full max-w-lg m-4 space-y-4">
+            <div class="flex justify-between items-center pb-2 border-b">
+                <h3 class="text-xl font-bold text-gray-800">Analyze Number Plate</h3>
+                <button onclick="closeScannerModal()" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div id="image-preview-container" class="bg-gray-200 rounded-lg overflow-hidden aspect-video relative flex items-center justify-center">
+                 <img id="scanner-image-preview" class="max-w-full max-h-full object-contain">
+            </div>
+            <p id="scanner-status" class="text-center text-gray-600 min-h-[1.5rem] flex items-center justify-center gap-2"></p>
+            <button id="analyze-btn" onclick="analyzeImageWithAPI()" class="btn-primary">
+                <span class="material-symbols-outlined">visibility</span>Analyze Image
+            </button>
+        </div>
+    </div>
+
+
+    <div id="delete-confirmation-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-hidden"><div class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div><div class="relative bg-white rounded-lg p-6 w-full max-w-sm m-4 space-y-4"><h3 class="text-xl font-bold text-gray-800">Confirm Deletion</h3><p id="delete-modal-text" class="text-gray-600"></p><div class="flex justify-end gap-4 pt-4"><button onclick="hideModal('delete-confirmation-modal')" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold">Cancel</button><button id="confirm-delete-button" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold">Confirm Delete</button></div></div></div>
+
+    <div id="duplicate-job-card-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-hidden">
+        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div class="relative bg-white rounded-lg p-6 w-full max-w-md m-4 space-y-4">
+            <div class="flex items-start">
+                <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <span class="material-symbols-outlined text-yellow-600">warning</span>
+                </div>
+                <div class="ml-4 text-left">
+                     <h3 class="text-xl font-bold text-gray-800">Duplicate Job Card Warning</h3>
+                     <p id="duplicate-modal-text" class="text-gray-600 mt-2"></p>
+                </div>
+            </div>
+            <div class="mt-4 border-t pt-4">
+                <label for="duplicate-confirmation-input" class="form-label">To proceed with creating a new job card, please type 'yes' below and confirm.</label>
+                <input id="duplicate-confirmation-input" type="text" class="form-input" placeholder="Type 'yes' to confirm">
+            </div>
+            <div class="flex justify-end gap-4 pt-4">
+                <button onclick="hideModal('duplicate-job-card-modal')" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold">Cancel</button>
+                <button id="confirm-duplicate-button" onclick="handleDuplicateConfirmation()" class="px-4 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white font-semibold">Confirm & Proceed</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="cancel-confirmation-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-hidden">
+        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div class="relative bg-white rounded-lg p-6 w-full max-w-md m-4 space-y-4">
+            <div class="flex items-start">
+                <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <span class="material-symbols-outlined text-red-600">cancel</span>
+                </div>
+                <div class="ml-4 text-left">
+                     <h3 class="text-xl font-bold text-gray-800">Confirm Job Cancellation</h3>
+                     <p id="cancel-modal-text" class="text-gray-600 mt-2"></p>
+                </div>
+            </div>
+            <div class="mt-4 border-t pt-4">
+                <label for="cancel-confirmation-input" class="form-label">To confirm cancellation, please type 'cancel' below.</label>
+                <input id="cancel-confirmation-input" type="text" class="form-input" placeholder="Type 'cancel' to confirm">
+            </div>
+            <div class="flex justify-end gap-4 pt-4">
+                <button onclick="closeCancelModal()" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold">Back</button>
+                <button id="confirm-cancel-button" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold">Confirm Cancellation</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="complete-confirmation-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-hidden">
+        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div class="relative bg-white rounded-lg p-6 w-full max-w-md m-4 space-y-4">
+            <div class="flex items-start">
+                <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <span class="material-symbols-outlined text-green-600">check_circle</span>
+                </div>
+                <div class="ml-4 text-left">
+                     <h3 class="text-xl font-bold text-gray-800">Confirm Job Completion</h3>
+                     <p id="complete-modal-text" class="text-gray-600 mt-2"></p>
+                </div>
+            </div>
+            <div class="mt-4 border-t pt-4">
+                <label for="complete-confirmation-input" class="form-label">To confirm that this job is completed, please type 'yes' below.</label>
+                <input id="complete-confirmation-input" type="text" class="form-input" placeholder="Type 'yes' to confirm">
+            </div>
+            <div class="flex justify-end gap-4 pt-4">
+                <button onclick="cancelCompletion()" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold">Cancel</button>
+                <button id="confirm-complete-button" class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold">Confirm Completion</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="marks-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 modal-hidden z-50">
+      <div class="bg-white rounded-lg p-4 relative max-w-lg w-full">
+        <button onclick="closeMarksModal()" class="absolute -top-2 -right-2 text-white bg-red-600 rounded-full h-8 w-8 flex items-center justify-center font-bold">&times;</button>
+        <h2 class="text-lg font-bold mb-2">Damage Marks</h2>
+        <div class="relative inline-block">
+            <img src="https://thumbs.dreamstime.com/b/car-line-art-ilustration-vector-car-line-art-ilustration-vector-car-line-art-ilustration-vector-118291586.jpg?w=768"
+                id="modalCarImage" alt="Car Outline with Marks" class="block w-full max-w-sm bg-white" crossorigin="anonymous"/>
+            <canvas id="modalCanvas" class="absolute top-0 left-0"></canvas>
+        </div>
+      </div>
+    </div>
+	
+	<div id="change-confirmation-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-hidden">
+        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div class="relative bg-white rounded-lg p-6 w-full max-w-sm m-4 space-y-4">
+            <div class="flex items-start">
+                <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <span class="material-symbols-outlined text-yellow-600">warning</span>
+                </div>
+                <div class="ml-4 text-left">
+                     <h3 class="text-xl font-bold text-gray-800">Confirm Change</h3>
+                     <p class="text-gray-600 mt-2">The customer has already provided their approval. Are you sure you want to modify the list of services?</p>
+                </div>
+            </div>
+            <div class="flex justify-end gap-4 pt-4">
+                <button id="cancel-change-button" onclick="hideModal('change-confirmation-modal')" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold">Cancel</button>
+                <button id="confirm-change-button" class="px-4 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white font-semibold">Confirm</button>
+            </div>
+        </div>
+    </div>
+	
+	
+<div id="whatsapp-feedback-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-hidden">
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
+    <div class="relative bg-white rounded-lg p-6 w-full max-w-md m-4 space-y-4">
+        <div class="flex items-start">
+            <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.003-5.462-4.415-9.89-9.881-9.894-5.462-.004-9.89 4.415-9.894 9.881-.002 2.225.651 3.891 1.746 5.634l-.999 3.648 3.747-.976zm11.387-5.464c-.074-.124-.272-.198-.568-.347-.297-.149-1.758-.868-2.03-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.149-.173.198-.297.297-.495.099-.198.05-.372-.025-.521-.074-.149-.669-1.611-.916-2.206-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.262.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"></path>
+                </svg>
+            </div>
+            <div class="ml-4 text-left">
+                 <h3 class="text-xl font-bold text-gray-800">Job Completed!</h3>
+                 <p class="text-gray-600 mt-2">Would you like to send a WhatsApp message to the customer to ask for their feedback?</p>
+            </div>
+        </div>
+        <div class="flex justify-end gap-4 pt-4">
+            <button onclick="hideModal('whatsapp-feedback-modal')" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold">No, Thanks</button>
+            <button id="confirm-feedback-send-button" class="px-4 py-2 rounded-lg bg-[#25D366] hover:bg-[#1DA851] text-white font-semibold flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448L.057 24z M12 21.8c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.003-5.462-4.415-9.89-9.881-9.894-5.462-.004-9.89 4.415-9.894 9.881-.002 2.225.651 3.891 1.746 5.634l-.999 3.648 3.747-.976z"></path></svg>
+                Send Feedback Request
+            </button>
+        </div>
+    </div>
+</div>
+
+
+	<div id="printable-job-card" class="printable-area">
+    <style>
+        /* Specific styles for the print layout */
+        .print-body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #fff;
+            color: #000;
+        }
+        .print-header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .print-header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+        .print-header p {
+            margin: 5px 0 0;
+            font-size: 14px;
+        }
+        .print-section {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .print-section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 0;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .print-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .print-grid .details p, .print-details-list p {
+            margin: 0 0 8px;
+            font-size: 14px;
+        }
+        .print-grid .details strong, .print-details-list strong {
+            display: block;
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 2px;
+        }
+        .print-details-list ul {
+            list-style-type: disc;
+            margin: 0;
+            padding-left: 20px;
+        }
+        .print-damage-section {
+            text-align: center;
+        }
+        .print-damage-section .image-container {
+            position: relative;
+            display: inline-block;
+            border: 1px solid #ccc;
+            padding: 5px;
+        }
+        .print-damage-section img {
+            display: block;
+            max-width: 400px;
+            background-color: #fff;
+        }
+        .print-damage-section canvas {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+        }
+        .print-footer {
+            margin-top: 40px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 100px;
+            font-size: 14px;
+        }
+        .print-footer div {
+            border-top: 1px solid #000;
+            padding-top: 10px;
+            text-align: center;
+        }
+    </style>
+    <div class="print-body">
+        <div class="print-header">
+            <h1>AutoFix Service</h1>
+            <p>Job Card / Service Report</p>
+        </div>
+        
+        <div class="print-section">
+            <h2 class="print-section-title">Report & Vehicle Details</h2>
+            <div class="print-grid">
+                <div class="details">
+                    <p><strong>Report Date:</strong> <span id="print-report-date"></span></p>
+                    <p><strong>Client Name:</strong> <span id="print-client-name"></span></p>
+                    <p><strong>Client Phone:</strong> <span id="print-client-phone"></span></p>
+                    <p><strong>Service Executive:</strong> <span id="print-executive-name"></span></p>
+                </div>
+                <div class="details">
+                    <p><strong>Vehicle No:</strong> <span id="print-vehicle-no"></span></p>
+                    <p><strong>Vehicle Name:</strong> <span id="print-vehicle-name"></span></p>
+                    <p><strong>Engine/Chassis No:</strong> <span id="print-engine-chassis"></span></p>
+                    <p><strong>Odometer:</strong> <span id="print-odometer"></span> km</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="print-section print-details-list">
+            <h2 class="print-section-title">Service Details</h2>
+            <p><strong>Customer Complaints:</strong></p>
+            <ul id="print-complaints-list"></ul>
+            <br>
+            <p><strong>Suggested Repairs:</strong></p>
+            <ul id="print-suggested-list"></ul>
+            <br>
+            <p><strong>Approved Repairs:</strong></p>
+            <ul id="print-approved-list"></ul>
+        </div>
+
+        <div class="print-section print-damage-section">
+            <h2 class="print-section-title">Vehicle Damage Marks</h2>
+            <div class="image-container">
+                <img id="print-car-image" src="https://thumbs.dreamstime.com/b/car-line-art-ilustration-vector-car-line-art-ilustration-vector-car-line-art-ilustration-vector-118291586.jpg?w=768" crossorigin="anonymous" />
+                <canvas id="print-damage-canvas"></canvas>
+            </div>
+        </div>
+
+        <div class="print-footer">
+            <div><strong>Executive Signature</strong></div>
+            <div><strong>Customer Signature</strong></div>
+        </div>
+    </div>
+</div>
+    <script src="bundle.js"></script>
+   <script async defer src="https://apis.google.com/js/api.js"></script>
+<script async defer src="https://accounts.google.com/gsi/client"></script>
+
+</body>
+</html>
+
