@@ -1,0 +1,25 @@
+/* Minimal fallback if Tailwind fails to load */
+:root{
+  --primary-color:#2563eb;--primary-hover:#1d4ed8;--background-color:#f9fafb;
+  --card-background:#fff;--border-color:#e5e7eb;--text-primary:#111827;--text-secondary:#6b7280;--text-on-primary:#fff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;font-family:Manrope,Arial,Helvetica,sans-serif;background:var(--background-color);color:var(--text-primary)}
+a{color:var(--primary-color)}
+.card{background:var(--card-background);padding:20px;border:1px solid var(--border-color);border-radius:12px;margin:8px 0}
+.form-label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px}
+.form-input{width:100%;padding:10px 12px;border:1px solid var(--border-color);border-radius:10px}
+.btn-primary,.btn-secondary,.btn-whatsapp{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border-radius:10px;font-weight:700;border:none;cursor:pointer}
+.btn-primary{background:var(--primary-color);color:var(--text-on-primary)}
+.btn-secondary{background:var(--text-secondary);color:var(--text-on-primary)}
+.btn-whatsapp{background:#25D366;color:#fff}
+.app-header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--border-color);z-index:10}
+.app-header-content{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px}
+.app-main{padding:16px}
+.screen{display:none}.active-screen{display:block}
+.material-symbols-outlined{font-family:'Material Symbols Outlined'}
+/* simple grid fallback */
+.grid{display:grid;gap:16px}
+.flex{display:flex}
+.hidden{display:none}
+.text-center{text-align:center}
