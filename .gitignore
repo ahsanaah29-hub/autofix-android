@@ -1,6 +1,0 @@
-node_modules/
-dist/
-bundle.js
-bundle.js.LICENSE
-*.log
-.env
